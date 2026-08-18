@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "G4R",
+    "slug": "G4R",
+    "version": "1.7.0",
+    "orientation": "portrait",
+    "icon": "./assets/android-icon-monochrome.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-photo-bg.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Go4Ride uses your location to set your pickup point, show your position on the map, calculate ride fares, and connect you with nearby drivers. For example, when you tap \"Use Current Location\", we use your GPS coordinates to fill in your pickup address and estimate your fare.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Go4Ride uses your location during an active ride to keep your pickup point accurate and update your trip on the map. For example, while you are waiting for a driver, we use your location so they can navigate to your pickup spot.",
+        "NSLocationAlwaysUsageDescription": "Go4Ride uses your location during an active ride to keep your pickup point accurate and update your trip on the map. For example, while you are waiting for a driver, we use your location so they can navigate to your pickup spot.",
+        "NSFaceIDUsageDescription": "Go4Ride uses Face ID to securely store and protect your login credentials on this device. For example, Face ID verifies your identity before allowing access to your saved sign-in session."
+      },
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "buildNumber": "7",
+      "bundleIdentifier": "com.aditya.sengar.G4R"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0773DE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.aditya.sengar.G4R",
+      "versionCode": 7,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBPSbMDRbS--b-EvJm1QVNn_NnBS0sUHis"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Go4Ride uses your location to set your pickup point, show your position on the map, calculate ride fares, and connect you with nearby drivers. For example, when you tap \"Use Current Location\", we use your GPS coordinates to fill in your pickup address and estimate your fare.",
+          "locationAlwaysAndWhenInUsePermission": "Go4Ride uses your location during an active ride to keep your pickup point accurate and update your trip on the map. For example, while you are waiting for a driver, we use your location so they can navigate to your pickup spot.",
+          "locationAlwaysPermission": "Go4Ride uses your location during an active ride to keep your pickup point accurate and update your trip on the map. For example, while you are waiting for a driver, we use your location so they can navigate to your pickup spot."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Go4Ride uses Face ID to securely store and protect your login credentials on this device. For example, Face ID verifies your identity before allowing access to your saved sign-in session."
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-photo-bg.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "AIzaSyBPSbMDRbS--b-EvJm1QVNn_NnBS0sUHis"
+        }
+      ]
+    ]
+  }
+}
