@@ -2,9 +2,38 @@ import { useEffect, useRef } from "react";
 import SecureStorage from "../../utils/SecureStorage";
 import { getWsBaseUrl } from "../../service/api/apiClient";
 import { RIDE_ENDPOINTS } from "../../service/config/apiEndPoint";
-import type { DriverSummary, RideStatus, RideWsEvent } from "../../service/api/types";
+import type {
+  DriverSummary,
+  RideStatus,
+  RideWsEvent,
+} from "../../service/api/types";
 import { useActiveRide } from "../../context/ActiveRideContext";
 import { normalizeStartOtp } from "../../utils/rideHelpers";
+
+const rideSocketRef: { current: WebSocket | null } = { current: null };
+
+export function sendRideCancel(rideId?: string | null) {
+  const ws = rideSocketRef.current;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return false;
+  }
+
+  const payload = {
+    type: "cancel",
+    ...(rideId ? { ride_id: rideId } : {}),
+  };
+  ws.send(JSON.stringify(payload));
+  logWs("SEND", payload);
+  try {
+    ws.close();
+  } catch {
+    // ignore
+  }
+  if (rideSocketRef.current === ws) {
+    rideSocketRef.current = null;
+  }
+  return true;
+}
 
 const TERMINAL_STATUSES: RideStatus[] = ["completed", "cancelled"];
 const MAX_RECONNECT_ATTEMPTS = 12;
@@ -12,7 +41,7 @@ const BASE_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 15000;
 
 function logWs(message: string, payload?: unknown) {
-  console.log(`\n===== WS ${message} =====`);
+  console.log(`\n===== WS App Sending ${message} =====`);
   if (payload !== undefined) {
     console.log(
       typeof payload === "string" ? payload : JSON.stringify(payload, null, 2),
@@ -96,7 +125,9 @@ export function useRideWebSocket(
       }, delay);
     };
 
-    const extractStartOtp = (payload: RideWsEvent | Record<string, unknown>) => {
+    const extractStartOtp = (
+      payload: RideWsEvent | Record<string, unknown>,
+    ) => {
       const record = payload as Record<string, unknown>;
       const nested =
         record.data && typeof record.data === "object"
@@ -174,6 +205,7 @@ export function useRideWebSocket(
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      rideSocketRef.current = ws;
 
       ws.onopen = () => {
         logWs("OPEN", { rideId });
@@ -206,6 +238,9 @@ export function useRideWebSocket(
 
       ws.onclose = (event) => {
         logWs("CLOSED", { rideId, code: event.code, reason: event.reason });
+        if (rideSocketRef.current === ws) {
+          rideSocketRef.current = null;
+        }
         wsRef.current = null;
 
         if (!isActive || intentionalCloseRef.current) {
@@ -229,10 +264,14 @@ export function useRideWebSocket(
       isActive = false;
       intentionalCloseRef.current = true;
       clearReconnectTimer();
-      if (wsRef.current) {
-        wsRef.current.onclose = null;
-        wsRef.current.close();
+      const ws = wsRef.current;
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
         wsRef.current = null;
+      }
+      if (rideSocketRef.current === ws) {
+        rideSocketRef.current = null;
       }
     };
   }, [rideId, reconnectNonce, updateFromWs, clearActiveRide]);

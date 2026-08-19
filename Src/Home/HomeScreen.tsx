@@ -34,7 +34,7 @@ import RideInfoCard from "../components/map/RideInfoCard";
 import { useRideQuote } from "../hooks/rides/useRideQuote";
 import { useRecentDestinations } from "../hooks/rides/useRecentDestinations";
 import { useCreateRide } from "../hooks/rides/useCreateRide";
-import { useCancelRide } from "../hooks/rides/useCancelRide";
+import { sendRideCancel } from "../hooks/rides/useRideWebSocket";
 import { useSmoothDriverCoordinate } from "../hooks/rides/useSmoothDriverCoordinate";
 import { useHeadingFromCoordinates } from "../hooks/rides/useHeadingFromCoordinates";
 import { useLiveDrivingRoute } from "../hooks/rides/useLiveDrivingRoute";
@@ -159,7 +159,6 @@ export default function HomeScreen({ navigation, route }) {
     error: quoteFetchError,
   } = useRideQuote();
   const createRideMutation = useCreateRide();
-  const cancelRideMutation = useCancelRide();
   const {
     data: recentDestinations = [],
     isLoading: isRecentDestinationsLoading,
@@ -228,6 +227,47 @@ export default function HomeScreen({ navigation, route }) {
     setIsRideConfirmationOpen(false);
     setPendingRideTypeSlug(null);
   }, []);
+
+  const restoreIdleHomeView = useCallback(() => {
+    setIsRideSheetOpen(false);
+    setIsRideConfirmationOpen(false);
+    setPendingRideTypeSlug(null);
+    setDropLocation(null);
+    setDirectionsCoords([]);
+    setFollowNavigation(true);
+    resetQuote();
+    navigation.setParams({ pickup: pickupLocation, drop: undefined });
+
+    const latitude = pickupLocation?.latitude;
+    const longitude = pickupLocation?.longitude;
+    if (latitude == null || longitude == null) {
+      return;
+    }
+
+    const nextRegion = {
+      latitude,
+      longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+    setRegion(nextRegion);
+
+    const applyIdleCamera = () => {
+      mapRef.current?.animateCamera?.(
+        {
+          center: { latitude, longitude },
+          heading: 0,
+          pitch: 0,
+          zoom: 15,
+        },
+        { duration: 350 },
+      );
+    };
+
+    applyIdleCamera();
+    setTimeout(applyIdleCamera, 80);
+    setTimeout(applyIdleCamera, 320);
+  }, [navigation, pickupLocation, resetQuote]);
 
   const previewRouteCoords = useMemo(() => {
     if (!pickupLocation?.latitude || !dropLocation?.latitude) return [];
@@ -615,30 +655,8 @@ export default function HomeScreen({ navigation, route }) {
     if (!hadActiveRideRef.current) return;
 
     hadActiveRideRef.current = false;
-    setDropLocation(null);
-    setDirectionsCoords([]);
-    setIsRideSheetOpen(false);
-    setIsRideConfirmationOpen(false);
-    setPendingRideTypeSlug(null);
-    resetQuote();
-    navigation.setParams({ pickup: pickupLocation, drop: undefined });
-
-    if (pickupLocation?.latitude && pickupLocation?.longitude) {
-      const nextRegion = {
-        latitude: pickupLocation.latitude,
-        longitude: pickupLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-      setRegion(nextRegion);
-      mapRef.current?.animateToRegion?.(nextRegion, 400);
-    }
-  }, [
-    activeRide?.id,
-    navigation,
-    pickupLocation,
-    resetQuote,
-  ]);
+    restoreIdleHomeView();
+  }, [activeRide?.id, restoreIdleHomeView]);
 
   const handleRecentDestinationPress = useCallback(
     async (destination: RecentDestination) => {
@@ -754,25 +772,8 @@ export default function HomeScreen({ navigation, route }) {
         : "Driver on the way";
 
   const dismissRideSelection = useCallback(() => {
-    setIsRideSheetOpen(false);
-    setIsRideConfirmationOpen(false);
-    setPendingRideTypeSlug(null);
-    setDropLocation(null);
-    setDirectionsCoords([]);
-    resetQuote();
-    navigation.setParams({ pickup: pickupLocation, drop: undefined });
-
-    if (pickupLocation?.latitude && pickupLocation?.longitude) {
-      const nextRegion = {
-        latitude: pickupLocation.latitude,
-        longitude: pickupLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-      setRegion(nextRegion);
-      mapRef.current?.animateToRegion?.(nextRegion, 400);
-    }
-  }, [navigation, pickupLocation, resetQuote]);
+    restoreIdleHomeView();
+  }, [restoreIdleHomeView]);
 
   const dismissRideConfirmation = useCallback(() => {
     setIsRideConfirmationOpen(false);
@@ -1011,47 +1012,33 @@ export default function HomeScreen({ navigation, route }) {
     ],
   );
 
-  const handleCancelRide = useCallback(async () => {
+  const handleCancelRide = useCallback(() => {
     if (!activeRide?.id) {
       return;
     }
 
-    try {
-      await cancelRideMutation.mutateAsync(activeRide.id);
-      clearActiveRide();
-      setIdempotencyKey(generateIdempotencyKey());
-      setIsRideSheetOpen(false);
-      setIsRideConfirmationOpen(false);
-      setPendingRideTypeSlug(null);
-      setDropLocation(null);
-      setDirectionsCoords([]);
-      resetQuote();
-      navigation.setParams({ pickup: pickupLocation, drop: undefined });
-
-      if (pickupLocation?.latitude && pickupLocation?.longitude) {
-        const nextRegion = {
-          latitude: pickupLocation.latitude,
-          longitude: pickupLocation.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-        setRegion(nextRegion);
-        mapRef.current?.animateToRegion?.(nextRegion, 400);
-      }
-    } catch (error) {
+    const sent = sendRideCancel(activeRide.id);
+    if (!sent) {
       Toast.show({
         type: "error",
         text1: "Cancel failed",
-        text2: error?.message ?? "Unable to cancel ride.",
+        text2: "Live ride connection is not ready. Try again.",
       });
+      return;
     }
+
+    clearActiveRide();
+    setIdempotencyKey(generateIdempotencyKey());
+    restoreIdleHomeView();
+
+    Toast.show({
+      type: "info",
+      text1: "Ride cancelled",
+    });
   }, [
     activeRide?.id,
-    cancelRideMutation,
     clearActiveRide,
-    navigation,
-    pickupLocation,
-    resetQuote,
+    restoreIdleHomeView,
   ]);
 
   const handleFindingBackPress = useCallback(() => {
@@ -1317,7 +1304,6 @@ export default function HomeScreen({ navigation, route }) {
     ]),
   );
 
-  const isBooking = createRideMutation.isPending || cancelRideMutation.isPending;
   const quoteError = isQuoteError
     ? (quoteFetchError?.message ?? "Unable to load fares. Check your connection and try again.")
     : null;
@@ -1703,7 +1689,7 @@ export default function HomeScreen({ navigation, route }) {
       <FindingRideBottomSheet
         visible={shouldShowTripSheet && isSearchingTrip}
         onCancel={handleCancelRide}
-        isCancelling={cancelRideMutation.isPending}
+        isCancelling={false}
         status={tripStatus}
       />
 
@@ -1718,7 +1704,7 @@ export default function HomeScreen({ navigation, route }) {
           "Pickup",
         )}
         onCancel={handleCancelRide}
-        isCancelling={cancelRideMutation.isPending}
+        isCancelling={false}
       />
       {showHomeChrome && (
         <HomeBottomTabBar activeTab="home" embedded />

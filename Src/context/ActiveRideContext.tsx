@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { DriverSummary, Ride, RideStatus } from "../service/api/types";
@@ -59,8 +60,10 @@ export function ActiveRideProvider({ children }: { children: React.ReactNode }) 
     id: string;
     label: string;
   } | null>(null);
+  const activeRideRef = useRef<Ride | null>(null);
 
   const setActiveRide = useCallback((ride: Ride | null) => {
+    activeRideRef.current = ride;
     setActiveRideState(ride);
     setWsStatus(ride?.status ?? null);
     setDriver(ride?.driver ?? null);
@@ -89,6 +92,10 @@ export function ActiveRideProvider({ children }: { children: React.ReactNode }) 
       start_otp?: string | null;
       final_fare?: string | null;
     }) => {
+      if (!activeRideRef.current) {
+        return;
+      }
+
       if (update.status) {
         setWsStatus(update.status);
         setActiveRideState((prev) =>
@@ -112,7 +119,6 @@ export function ActiveRideProvider({ children }: { children: React.ReactNode }) 
         }
       }
 
-      // Ride started → hide start OTP, switch to live trip
       if (update.status === "in_progress") {
         setStartOtp(null);
         setActiveRideState((prev) =>
@@ -147,6 +153,7 @@ export function ActiveRideProvider({ children }: { children: React.ReactNode }) 
   );
 
   const clearActiveRide = useCallback(() => {
+    activeRideRef.current = null;
     setActiveRideState(null);
     setWsStatus(null);
     setDriver(null);

@@ -27,10 +27,6 @@ export const createRide = (
   });
 };
 
-export const cancelRide = (rideId: string): Promise<Ride> => {
-  return apiPost<Ride>(RIDE_ENDPOINTS.Cancel(rideId));
-};
-
 export const getRide = (rideId: string): Promise<Ride> => {
   return apiGet<Ride>(RIDE_ENDPOINTS.Detail(rideId));
 };

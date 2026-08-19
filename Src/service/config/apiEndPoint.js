@@ -10,7 +10,6 @@ const AUTH_ENDPOINTS = {
 const RIDE_ENDPOINTS = {
   Quote: "/api/v1/rides/quote",
   Create: "/api/v1/rides",
-  Cancel: (rideId) => `/api/v1/rides/${rideId}/cancel`,
   Detail: (rideId) => `/api/v1/rides/${rideId}`,
   Status: (rideId) => `/api/v1/rides/${rideId}/status`,
   Invoice: (rideId) => `/api/v1/rides/${rideId}/invoice`,
