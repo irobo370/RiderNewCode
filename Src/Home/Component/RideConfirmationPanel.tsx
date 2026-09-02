@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS } from "../../utils/colors";
 import { FONTS } from "../../utils/fonts";
-import { DEFAULT_CURRENCY } from "../../constants/locale";
+import { getActiveCountry } from "../../constants/locale";
 import { formatFare, resolveDisplayAddress } from "../../utils/rideHelpers";
 import type { RideQuote } from "../../service/api/types";
 import BookingStepIndicator from "./BookingStepIndicator";
@@ -128,7 +128,7 @@ function RideConfirmationPanel({
     quote?.drop_address,
     "Drop-off location",
   );
-  const currency = quote?.currency ?? DEFAULT_CURRENCY;
+  const currency = quote?.currency ?? getActiveCountry().currency;
   const fare = selectedOption?.estimated_fare ?? "0";
   const eta =
     selectedOption?.pickup_eta_min ??

@@ -1,5 +1,5 @@
 import type { Ride } from "../service/api/types";
-import { DEFAULT_CURRENCY } from "../constants/locale";
+import { getActiveCountry } from "../constants/locale";
 import { formatFare } from "./rideHelpers";
 
 export function formatRideTypeLabel(slug: string | null | undefined): string {
@@ -49,7 +49,7 @@ export function getRideTimestamp(ride: Ride): string {
 
 export function getRideFareLabel(ride: Ride): string {
   const amount = ride.final_fare ?? ride.estimated_fare ?? "0";
-  return formatFare(ride.currency ?? DEFAULT_CURRENCY, amount);
+  return formatFare(ride.currency ?? getActiveCountry().currency, amount);
 }
 
 export function isRideCompleted(ride: Ride): boolean {

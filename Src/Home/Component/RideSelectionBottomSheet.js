@@ -19,7 +19,7 @@ import { TYPO } from "../../utils/typography";
 import { SPACING } from "../../utils/spacing";
 import BookingStepIndicator from "./BookingStepIndicator";
 import { formatFare } from "../../utils/rideHelpers";
-import { DEFAULT_CURRENCY } from "../../constants/locale";
+import { getActiveCountry } from "../../constants/locale";
 import { getMapLifecyclePanelHeight } from "../../constants/mapLayout";
 
 const HORIZONTAL_PADDING = 18;
@@ -119,37 +119,20 @@ function getCheapestSlug(quote) {
 }
 
 function buildProviders(quote, apiSlug) {
-  const g4rOption = getQuoteOption(quote, apiSlug);
-  const currency = quote?.currency ?? DEFAULT_CURRENCY;
-  const g4rFare = parseFloat(g4rOption?.estimated_fare ?? "0");
-  const g4rEta = g4rOption?.pickup_eta_min ?? g4rOption?.total_eta_min ?? 3;
+  const option = getQuoteOption(quote, apiSlug);
+  if (!option) {
+    return [];
+  }
 
   return [
     {
       id: "g4r",
       name: "G4R",
-      isG4R: true,
-      eta: g4rEta,
-      fare: g4rOption?.estimated_fare,
-      currency,
-      available: g4rOption?.available ?? false,
-      cheapest: true,
-    },
-    {
-      id: "provider_a",
-      name: "A",
-      isPlaceholder: true,
-      eta: 5,
-      fare: g4rFare > 0 ? String(Math.round(g4rFare * 1.18)) : "18",
-      currency,
-    },
-    {
-      id: "provider_b",
-      name: "B",
-      isPlaceholder: true,
-      eta: 6,
-      fare: g4rFare > 0 ? String(Math.round(g4rFare * 1.14)) : "17",
-      currency,
+      eta: option.pickup_eta_min ?? option.total_eta_min ?? null,
+      fare: option.estimated_fare,
+      currency: quote?.currency ?? getActiveCountry().currency,
+      available: option.available ?? false,
+      cheapest: getCheapestSlug(quote) === apiSlug,
     },
   ];
 }
@@ -166,7 +149,6 @@ function RideSelectionBottomSheet({
   const insets = useSafeAreaInsets();
   const [expandedKey, setExpandedKey] = useState("mini");
   const [selectedSlug, setSelectedSlug] = useState("mini");
-  const [selectedProvider, setSelectedProvider] = useState("g4r");
 
   const selectedCategory =
     RIDE_CATEGORIES.find((c) => c.apiSlug === selectedSlug) ??
@@ -175,92 +157,73 @@ function RideSelectionBottomSheet({
   useEffect(() => {
     setExpandedKey("mini");
     setSelectedSlug("mini");
-    setSelectedProvider("g4r");
   }, [quote?.quote_expires_at]);
 
   const toggleCategory = (category) => {
     setExpandedKey(category.key);
     setSelectedSlug(category.apiSlug);
-    setSelectedProvider("g4r");
   };
 
   const getFromLabel = (category) => {
     const option = getQuoteOption(quote, category.apiSlug);
     if (option?.estimated_fare) {
-      return `from ${formatFare(quote?.currency ?? DEFAULT_CURRENCY, option.estimated_fare)}`;
+      return `from ${formatFare(quote?.currency ?? getActiveCountry().currency, option.estimated_fare)}`;
     }
     return category.placeholderFrom;
   };
 
   const handleConfirm = useCallback(() => {
-    if (selectedProvider !== "g4r") return;
     onSelectRide?.({ rideTypeSlug: selectedSlug });
-  }, [onSelectRide, selectedProvider, selectedSlug]);
+  }, [onSelectRide, selectedSlug]);
 
   const confirmLabel = `Confirm ${selectedCategory?.name ?? "Ride"}`;
 
   const fastestSlug = getFastestSlug(quote);
   const cheapestSlug = getCheapestSlug(quote);
+  const selectedOption = getQuoteOption(quote, selectedSlug);
 
   const isConfirmDisabled =
     !selectedSlug ||
-    selectedProvider !== "g4r" ||
+    !selectedOption?.available ||
     isQuoteLoading ||
     !!quoteError;
 
   const renderProviderRow = (provider) => {
-    const isG4R = provider.isG4R;
-    const isSelected = isG4R && selectedProvider === "g4r";
-
     return (
-      <TouchableOpacity
+      <View
         key={provider.id}
-        activeOpacity={isG4R ? 0.9 : 1}
-        disabled={!isG4R || !provider.available}
-        onPress={() => {
-          if (isG4R) setSelectedProvider("g4r");
-        }}
         style={[
           styles.providerRow,
-          isSelected && styles.providerRowSelected,
-          isG4R && !provider.available && styles.providerRowDisabled,
+          styles.providerRowSelected,
+          !provider.available && styles.providerRowDisabled,
         ]}
       >
         <View style={styles.providerLeft}>
-          {isG4R ? (
-            <Image source={G4R_LOGO} style={styles.g4rLogoImage} />
-          ) : (
-            <View style={styles.placeholderLogo}>
-              <Text style={styles.placeholderLogoText}>{provider.name}</Text>
-            </View>
-          )}
+          <Image source={G4R_LOGO} style={styles.g4rLogoImage} />
 
           <View style={styles.providerText}>
             <View style={styles.providerNameRow}>
               <Text style={styles.providerName}>{provider.name}</Text>
-              {isG4R && provider.cheapest ? (
+              {provider.cheapest ? (
                 <View style={styles.cheapestBadge}>
                   <Text style={styles.cheapestBadgeText}>CHEAPEST</Text>
                 </View>
               ) : null}
             </View>
             <Text style={styles.providerEta}>
-              {isG4R && !provider.available
+              {!provider.available
                 ? "No drivers nearby"
-                : `ETA: ${provider.eta} mins`}
+                : provider.eta != null
+                  ? `ETA: ${provider.eta} mins`
+                  : "ETA unavailable"}
             </Text>
           </View>
         </View>
 
-        <Text
-          style={[
-            styles.providerFare,
-            isG4R && isSelected && styles.providerFareActive,
-          ]}
-        >
-          {formatFare(provider.currency ?? DEFAULT_CURRENCY, provider.fare ?? "0")}
+        <Text style={[styles.providerFare, styles.providerFareActive]}>
+          {formatFare(provider.currency ?? getActiveCountry().currency, provider.fare ?? "0")}
         </Text>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -649,19 +612,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 10,
     resizeMode: "cover",
-  },
-  placeholderLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#E8E8EA",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderLogoText: {
-    color: FIGMA.textPrimary,
-    fontFamily: FONTS.bold,
-    fontSize: 16,
   },
   providerText: {
     flex: 1,

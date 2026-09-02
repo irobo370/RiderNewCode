@@ -1,7 +1,8 @@
-import { APP_COUNTRY_NAME, PHONE_LOCAL_DIGITS } from "../constants/locale";
+import { getActiveCountry } from "../constants/locale";
 
 export const validatePhone = (phone: String) => {
   let cleaned = phone.replace(/\D/g, "");
+  const country = getActiveCountry();
 
   // Allow domestic trunk 0 (081…)
   if (cleaned.startsWith("0")) {
@@ -12,8 +13,8 @@ export const validatePhone = (phone: String) => {
     return "Mobile number is required";
   }
 
-  if (cleaned.length < PHONE_LOCAL_DIGITS) {
-    return `Enter a valid ${APP_COUNTRY_NAME} mobile number`;
+  if (cleaned.length < country.phoneLocalDigits) {
+    return `Enter a valid ${country.name} mobile number`;
   }
 
   return "";

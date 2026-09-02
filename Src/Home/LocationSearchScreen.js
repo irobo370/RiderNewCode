@@ -20,7 +20,7 @@ import { FONTS } from "../utils/fonts";
 import { TYPO } from "../utils/typography";
 import { SPACING } from "../utils/spacing";
 import { goBackOrHome } from "../navigation/navigationRef";
-import { DEFAULT_MAP_REGION } from "../constants/locale";
+import { useCountryMarket } from "../context/CountryMarketContext";
 import { getCurrentLocation as resolveCurrentLocation, watchUserCoordinates, reverseGeocodeAddress } from "../utils/locationHelpers";
 import { getMapLifecycleMapHeight } from "../constants/mapLayout";
 import {
@@ -61,10 +61,13 @@ export default function LocationSearchScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  const { country } = useCountryMarket();
   const mapRef = useRef(null);
   /** When true, GPS watch recenters the map. Kept false after first seed / place select. */
   const followUserLocationRef = useRef(false);
-  const mapRegionRef = useRef(DEFAULT_MAP_REGION);
+  const mapRegionRef = useRef(country.mapRegion);
+  const seededPickupRef = useRef(false);
+  const prevCountryIdRef = useRef(country.id);
 
   const updateFollowUserLocation = useCallback((enabled) => {
     followUserLocationRef.current = enabled;
@@ -113,6 +116,38 @@ export default function LocationSearchScreen() {
   }, []);
 
   useEffect(() => {
+    const countryChanged = prevCountryIdRef.current !== country.id;
+    prevCountryIdRef.current = country.id;
+    if (!countryChanged) {
+      return;
+    }
+
+    // Keep GPS camera when country / phone code changes.
+    if (
+      seededPickupRef.current &&
+      pickupCoords?.latitude != null &&
+      pickupCoords?.longitude != null
+    ) {
+      applyMapCoords(
+        {
+          latitude: pickupCoords.latitude,
+          longitude: pickupCoords.longitude,
+        },
+        { animate: true },
+      );
+      return;
+    }
+
+    mapRegionRef.current = country.mapRegion;
+  }, [
+    country.id,
+    country.mapRegion,
+    pickupCoords?.latitude,
+    pickupCoords?.longitude,
+    applyMapCoords,
+  ]);
+
+  useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent =
@@ -133,8 +168,6 @@ export default function LocationSearchScreen() {
       hideSub.remove();
     };
   }, []);
-
-  const seededPickupRef = useRef(false);
 
   useEffect(() => {
     let subscription = null;
@@ -262,7 +295,9 @@ export default function LocationSearchScreen() {
       const location = await resolveCurrentLocation();
 
       if (!location) {
-        alert("Location permission denied");
+        alert(
+          "Unable to get your current location. Enable location permission and GPS, then try again.",
+        );
         return;
       }
 
@@ -546,7 +581,16 @@ export default function LocationSearchScreen() {
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
-          initialRegion={DEFAULT_MAP_REGION}
+          initialRegion={
+            pickupCoords?.latitude != null && pickupCoords?.longitude != null
+              ? {
+                  latitude: pickupCoords.latitude,
+                  longitude: pickupCoords.longitude,
+                  latitudeDelta: MAP_DELTA,
+                  longitudeDelta: MAP_DELTA,
+                }
+              : country.mapRegion
+          }
           onMapReady={() => {
             if (mapRef.current?.animateToRegion) {
               mapRef.current.animateToRegion(mapRegionRef.current, 0);

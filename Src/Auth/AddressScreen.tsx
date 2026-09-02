@@ -19,10 +19,12 @@ import { COLORS } from "../utils/colors";
 import { FONTS } from "../utils/fonts";
 import { ScreenHeader } from "../components/ui";
 import { getCurrentLocation } from "../utils/locationHelpers";
-import { SAMPLE_ADDRESSES } from "../constants/locale";
+import { useCountryMarket } from "../context/CountryMarketContext";
 
 export default function AddressScreen() {
   const navigation = useNavigation();
+  const { country } = useCountryMarket();
+  const sampleAddresses = country.sampleAddresses;
 
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -37,7 +39,7 @@ export default function AddressScreen() {
   const [stateName, setStateName] = useState("");
   const [zipCode, setZipCode] = useState("");
 
-  const savedAddresses = SAMPLE_ADDRESSES.filter(
+  const savedAddresses = sampleAddresses.filter(
     (item) => item.type === "home" || item.type === "work",
   ).map((item) => ({
     id: item.id,
@@ -45,7 +47,7 @@ export default function AddressScreen() {
     address: item.address,
   }));
 
-  const favouriteAddresses = SAMPLE_ADDRESSES.filter(
+  const favouriteAddresses = sampleAddresses.filter(
     (item) => item.type === "other",
   ).map((item) => ({
     id: item.id,

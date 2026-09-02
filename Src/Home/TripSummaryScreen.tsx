@@ -20,7 +20,7 @@ import { resetToHome } from "../navigation/navigationRef";
 import type { DriverSummary, Ride, RideInvoice } from "../service/api/types";
 import { COLORS } from "../utils/colors";
 import { FONTS } from "../utils/fonts";
-import { DEFAULT_CURRENCY } from "../constants/locale";
+import { getActiveCountry } from "../constants/locale";
 import { getCurrencyMeta } from "../constants/countries";
 import { resolveDisplayAddress } from "../utils/rideHelpers";
 
@@ -247,7 +247,7 @@ export default function TripSummaryScreen() {
     ride?.drop_address,
     "Drop location",
   );
-  const currency = invoice?.currency ?? DEFAULT_CURRENCY;
+  const currency = invoice?.currency ?? getActiveCountry().currency;
   const fareAmount = formatFareAmount(
     currency,
     invoice?.final_fare ?? ride?.final_fare ?? ride?.estimated_fare,

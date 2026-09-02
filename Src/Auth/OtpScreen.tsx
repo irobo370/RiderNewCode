@@ -27,6 +27,7 @@ import { RADIUS, SPACING } from "../utils/spacing";
 import { formatPhoneDisplay } from "../utils/phoneFormat";
 import { loginRequest } from "../redux/Auth/authSlice";
 import { verifyOtpRequest } from "../redux/Auth/verifyOtpSlice";
+import { getCurrentCoords } from "../utils/locationHelpers";
 import { PrimaryButton } from "../components/ui";
 
 type LoginData = {
@@ -53,6 +54,7 @@ export default function OtpScreen() {
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [timer, setTimer] = useState(RESEND_SECONDS);
+  const [locating, setLocating] = useState(false);
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
   const phone = route.params?.phone ?? "";
@@ -143,7 +145,7 @@ export default function OtpScreen() {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const enteredOtp = otp.join("");
     const debugOtp = loginData?.data?.debug_otp;
 
@@ -165,10 +167,19 @@ export default function OtpScreen() {
       return;
     }
 
+    setLocating(true);
+    let coords: { latitude: number; longitude: number } | null = null;
+    try {
+      coords = await getCurrentCoords();
+    } finally {
+      setLocating(false);
+    }
+
     dispatch(
       verifyOtpRequest({
         code: enteredOtp,
         phone,
+        ...(coords ? { lat: coords.latitude, lng: coords.longitude } : {}),
       }),
     );
   };
@@ -195,7 +206,7 @@ export default function OtpScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Spinner
-        visible={loading}
+        visible={loading || locating}
         textContent="Verifying OTP..."
         textStyle={{ color: COLORS.white }}
       />

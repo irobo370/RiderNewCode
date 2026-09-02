@@ -30,7 +30,6 @@ import DriverOnWayPanel from "./Component/DriverOnWayPanel";
 import RiderMap from "../components/map/RiderMap";
 import NavigationHeader from "../components/map/NavigationHeader";
 import MapControls from "../components/map/MapControls";
-import RideInfoCard from "../components/map/RideInfoCard";
 import { useRideQuote } from "../hooks/rides/useRideQuote";
 import { useRecentDestinations } from "../hooks/rides/useRecentDestinations";
 import { useCreateRide } from "../hooks/rides/useCreateRide";
@@ -46,14 +45,8 @@ import {
   toCoordinates,
   resolveDisplayAddress,
   isCoordinateLikeAddress,
-  formatFare,
 } from "../utils/rideHelpers";
 import { decodePolyline, regionFromCoordinates } from "../utils/decodePolyline";
-import {
-  formatDistance,
-  formatDuration,
-} from "../utils/navigationGeometry";
-import { trafficLevelForRoute } from "../utils/googleDirections";
 import type { RecentDestination } from "../utils/recentDestinations";
 import { resetToLogin } from "../navigation/navigationRef";
 import { COLORS } from "../utils/colors";
@@ -64,11 +57,8 @@ import {
   watchUserCoordinates,
   reverseGeocodeAddress,
 } from "../utils/locationHelpers";
-import {
-  getMapLifecyclePanelHeight,
-  MAP_LIFECYCLE_MAP_EDGE_INSET,
-} from "../constants/mapLayout";
-import { DEFAULT_MAP_REGION } from "../constants/locale";
+import { MAP_LIFECYCLE_MAP_EDGE_INSET } from "../constants/mapLayout";
+import { useCountryMarket } from "../context/CountryMarketContext";
 
 function truncateAddress(text: string | undefined, max = 16) {
   if (!text) return "";
@@ -112,10 +102,11 @@ function getAddressTagStyle(
 
 export default function HomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { country } = useCountryMarket();
   const rootNavigation = navigation.getParent();
   const { isAuthenticated } = useSelector((state: any) => state.session);
-  const [region, setRegion] = useState(DEFAULT_MAP_REGION);
-  /** After the first GPS center, stop locking the camera to the user. */
+  const [region, setRegion] = useState(country.mapRegion);
+  /** Once GPS has centered the map, country fallback must not take over. */
   const hasCenteredOnUserRef = useRef(false);
   const [pickupLocation, setPickupLocation] = useState(null);
   const [dropLocation, setDropLocation] = useState(null);
@@ -138,7 +129,48 @@ export default function HomeScreen({ navigation, route }) {
   const isDriverArrivedRef = useRef(false);
   const isDriverOnWayRef = useRef(false);
   const isTripInProgressRef = useRef(false);
+  const followNavigationRef = useRef(true);
+  const followUserOnIdleRef = useRef(true);
   const mapInitialRegionRef = useRef(null);
+  const [mapLayoutEpoch, setMapLayoutEpoch] = useState(0);
+  const prevCountryIdRef = useRef(country.id);
+
+  followNavigationRef.current = followNavigation;
+
+  useEffect(() => {
+    const countryChanged = prevCountryIdRef.current !== country.id;
+    prevCountryIdRef.current = country.id;
+    if (!countryChanged) {
+      return;
+    }
+
+    // Changing India / DRC / US must keep the camera on the user's GPS.
+    if (
+      hasCenteredOnUserRef.current ||
+      (pickupLocation?.latitude != null && pickupLocation?.longitude != null)
+    ) {
+      if (pickupLocation?.latitude == null || pickupLocation?.longitude == null) {
+        return;
+      }
+      const nextRegion = {
+        latitude: pickupLocation.latitude,
+        longitude: pickupLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setRegion(nextRegion);
+      mapRef.current?.animateToRegion?.(nextRegion, 250);
+      return;
+    }
+
+    // No GPS yet — temporary market city only.
+    setRegion(country.mapRegion);
+  }, [
+    country.id,
+    country.mapRegion,
+    pickupLocation?.latitude,
+    pickupLocation?.longitude,
+  ]);
 
   const {
     activeRide,
@@ -181,6 +213,41 @@ export default function HomeScreen({ navigation, route }) {
 
   const isTripInProgress = tripStatus === "in_progress";
   isTripInProgressRef.current = isTripInProgress;
+
+  useEffect(() => {
+    if (!activeRide?.id) {
+      return;
+    }
+
+    const pickupLat = parseFloat(activeRide.pickup_lat);
+    const pickupLng = parseFloat(activeRide.pickup_lng);
+    const dropLat = parseFloat(activeRide.drop_lat);
+    const dropLng = parseFloat(activeRide.drop_lng);
+
+    if (!Number.isNaN(pickupLat) && !Number.isNaN(pickupLng)) {
+      setPickupLocation({
+        latitude: pickupLat,
+        longitude: pickupLng,
+        address: activeRide.pickup_address,
+      });
+    }
+
+    if (!Number.isNaN(dropLat) && !Number.isNaN(dropLng)) {
+      setDropLocation({
+        latitude: dropLat,
+        longitude: dropLng,
+        address: activeRide.drop_address,
+      });
+    }
+  }, [
+    activeRide?.id,
+    activeRide?.pickup_lat,
+    activeRide?.pickup_lng,
+    activeRide?.pickup_address,
+    activeRide?.drop_lat,
+    activeRide?.drop_lng,
+    activeRide?.drop_address,
+  ]);
 
   /** Matches driverMapGradient (180) + status pill so fit stays in the visible map band. */
   const driverMapTopChrome = insets.top + 156;
@@ -236,7 +303,12 @@ export default function HomeScreen({ navigation, route }) {
     setDirectionsCoords([]);
     setFollowNavigation(true);
     resetQuote();
-    navigation.setParams({ pickup: pickupLocation, drop: undefined });
+    // RN params ignore `undefined` — use null so focus hydration cannot revive drop.
+    navigation.setParams({ pickup: pickupLocation, drop: null });
+    // Force a clean map layout pass after trip chrome (flex:1) → idle (fixed height).
+    if (hadActiveRideRef.current) {
+      setMapLayoutEpoch((value) => value + 1);
+    }
 
     const latitude = pickupLocation?.latitude;
     const longitude = pickupLocation?.longitude;
@@ -743,6 +815,8 @@ export default function HomeScreen({ navigation, route }) {
   const showHomeChrome =
     !isActiveTrip && !dropLocation?.latitude && !shouldShowTripSheet;
 
+  followUserOnIdleRef.current = showHomeChrome;
+
   const showRideMapChrome =
     (isRideSheetOpen || isRideConfirmationOpen) &&
     !isActiveTrip &&
@@ -1110,7 +1184,30 @@ export default function HomeScreen({ navigation, route }) {
         },
         400,
       );
+      return;
     }
+
+    // Idle home with no pickup yet — fetch GPS and open the map there.
+    void (async () => {
+      const resolved = await getCurrentLocation();
+      if (!resolved) {
+        return;
+      }
+      setPickupLocation({
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+        address: resolved.address,
+      });
+      hasCenteredOnUserRef.current = true;
+      const nextRegion = {
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setRegion(nextRegion);
+      mapRef.current?.animateToRegion?.(nextRegion, 400);
+    })();
   }, [
     driverCoordinate,
     driverHeading,
@@ -1152,13 +1249,9 @@ export default function HomeScreen({ navigation, route }) {
         }
       }
 
-      if (drop) {
+      if (drop?.latitude != null && drop?.longitude != null) {
         setDropLocation(drop);
-        if (
-          drop.latitude != null &&
-          drop.longitude != null &&
-          isCoordinateLikeAddress(drop.address)
-        ) {
+        if (isCoordinateLikeAddress(drop.address)) {
           reverseGeocodeAddress(drop.latitude, drop.longitude).then(
             (address) => {
               if (!isActive || !address) return;
@@ -1171,6 +1264,8 @@ export default function HomeScreen({ navigation, route }) {
             },
           );
         }
+      } else if (drop == null && route.params?.drop === null) {
+        setDropLocation(null);
       }
 
       const mapTarget = drop?.latitude ? drop : pickup;
@@ -1218,35 +1313,35 @@ export default function HomeScreen({ navigation, route }) {
         }
       }, 400);
 
+      const centerMapOnCoords = (
+        latitude: number,
+        longitude: number,
+        animate = true,
+      ) => {
+        const nextRegion = {
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setRegion(nextRegion);
+        if (animate) {
+          mapRef.current?.animateToRegion?.(nextRegion, 400);
+        }
+      };
+
       const startLiveLocation = async () => {
         if (hasCompleteTrip || activeRide?.id || drop?.latitude) return;
 
-        // Seed map + pickup once from the user's real current location
-        if (!pickup?.latitude) {
-          const resolved = await getCurrentLocation();
-          if (!isActive) return;
-          if (resolved) {
-            hasCenteredOnUserRef.current = true;
-            setPickupLocation({
-              latitude: resolved.latitude,
-              longitude: resolved.longitude,
-              address: resolved.address,
-            });
-            const nextRegion = {
-              latitude: resolved.latitude,
-              longitude: resolved.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            };
-            setRegion(nextRegion);
-            mapRef.current?.animateToRegion?.(nextRegion, 400);
-          }
-        } else {
+        if (pickup?.latitude) {
           hasCenteredOnUserRef.current = true;
+        } else {
+          // Allow the first GPS fix (seed or watch) to move the camera.
+          hasCenteredOnUserRef.current = false;
         }
 
-        // Keep pickup coords fresh, but do not keep snapping the camera to GPS
-        const subscription = await watchUserCoordinates((coords) => {
+        const subscriptionPromise = watchUserCoordinates(
+          (coords) => {
           if (!isActive) return;
           if (isActiveTripRef.current) return;
 
@@ -1265,19 +1360,52 @@ export default function HomeScreen({ navigation, route }) {
             };
           });
 
+          const shouldFollowUser =
+            followUserOnIdleRef.current && followNavigationRef.current;
+
+          if (shouldFollowUser) {
+            hasCenteredOnUserRef.current = true;
+            centerMapOnCoords(coords.latitude, coords.longitude);
+            return;
+          }
+
           if (hasCenteredOnUserRef.current) return;
 
           hasCenteredOnUserRef.current = true;
-          const nextRegion = {
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          };
-          setRegion(nextRegion);
-          mapRef.current?.animateToRegion?.(nextRegion, 400);
-        });
+          centerMapOnCoords(coords.latitude, coords.longitude);
+        },
+          { distanceInterval: 5, timeInterval: 1500 },
+        );
 
+        // Seed map + pickup once from the user's real current location
+        if (!pickup?.latitude) {
+          const resolved = await getCurrentLocation();
+          if (!isActive) {
+            (await subscriptionPromise)?.remove();
+            return;
+          }
+          if (resolved && !hasCenteredOnUserRef.current) {
+            hasCenteredOnUserRef.current = true;
+            setPickupLocation({
+              latitude: resolved.latitude,
+              longitude: resolved.longitude,
+              address: resolved.address,
+            });
+            centerMapOnCoords(resolved.latitude, resolved.longitude);
+          } else if (resolved) {
+            setPickupLocation((prev) =>
+              prev
+                ? prev
+                : {
+                    latitude: resolved.latitude,
+                    longitude: resolved.longitude,
+                    address: resolved.address,
+                  },
+            );
+          }
+        }
+
+        const subscription = await subscriptionPromise;
         if (!isActive) {
           subscription?.remove();
           return;
@@ -1338,7 +1466,7 @@ export default function HomeScreen({ navigation, route }) {
     mapInitialRegionRef.current = region;
   }
 
-  const mapRegion = region ?? mapInitialRegionRef.current ?? DEFAULT_MAP_REGION;
+  const mapRegion = region ?? mapInitialRegionRef.current ?? country.mapRegion;
 
   const pickupTagStyle = getAddressTagStyle(pickupTagPosition, mapLayout);
   const dropTagStyle = getAddressTagStyle(dropTagPosition, mapLayout);
@@ -1352,11 +1480,6 @@ export default function HomeScreen({ navigation, route }) {
         : dropLocation?.latitude
           ? "preview"
           : "idle";
-
-  const cheapestFare = quoteData?.options
-    ?.filter((option) => option.available)
-    ?.map((option) => option.estimated_fare)
-    ?.sort((a, b) => parseFloat(a) - parseFloat(b))?.[0];
 
   const handleSavedPlacePress = useCallback(
     (place) => {
@@ -1376,10 +1499,11 @@ export default function HomeScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <View
-        style={[
-          styles.mapSection,
-          showHomeChrome ? null : styles.mapSectionHalf,
-        ]}
+        // Remount only after restoreIdleHomeView so trip→idle cannot leave a
+        // collapsed map strip (seen after kill → recover → cancel).
+        key={`map-${mapLayoutEpoch}`}
+        collapsable={false}
+        style={showHomeChrome ? styles.mapSection : styles.mapSectionTrip}
         onLayout={(event) => {
           const { width, height } = event.nativeEvent.layout;
           setMapLayout({ width, height });
@@ -1412,7 +1536,8 @@ export default function HomeScreen({ navigation, route }) {
               : []
           }
           showsTraffic={showsTraffic}
-          showsUserLocation={mapMode !== "navigation"}
+          showsUserLocation
+          followUser={mapMode === "idle" && followNavigation}
           mapPadding={
             isTripInProgress || trackDriverOnMap
               ? driverTripMapPadding
@@ -1422,8 +1547,19 @@ export default function HomeScreen({ navigation, route }) {
           }
           onMapReady={() => {
             scheduleMarkerTagUpdate();
+            // Prefer live GPS pickup over country fallback city.
+            const gpsRegion =
+              pickupLocation?.latitude != null &&
+              pickupLocation?.longitude != null
+                ? {
+                    latitude: pickupLocation.latitude,
+                    longitude: pickupLocation.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }
+                : mapRegion;
             if (mapRef.current?.animateToRegion) {
-              mapRef.current.animateToRegion(mapRegion, 0);
+              mapRef.current.animateToRegion(gpsRegion, 0);
             }
           }}
           onPanDrag={() => setFollowNavigation(false)}
@@ -1442,36 +1578,6 @@ export default function HomeScreen({ navigation, route }) {
             progress={turnByTurn.progress}
           />
         ) : null}
-
-        {mapMode === "preview" && routeCoords.length > 1 ? (
-          <RideInfoCard
-            bottom={getMapLifecyclePanelHeight() + 12}
-            distanceLabel={
-              liveRoute?.distanceMeters
-                ? formatDistance(liveRoute.distanceMeters)
-                : quoteData?.route?.distance_km
-                  ? `${Number(quoteData.route.distance_km).toFixed(1)} km`
-                  : "—"
-            }
-            durationLabel={
-              liveRoute?.durationSeconds
-                ? formatDuration(
-                    liveRoute.durationInTrafficSeconds ??
-                      liveRoute.durationSeconds,
-                  )
-                : quoteData?.route?.duration_min
-                  ? `${Math.round(Number(quoteData.route.duration_min))} min`
-                  : "—"
-            }
-            fareLabel={
-              cheapestFare
-                ? formatFare(quoteData?.currency, cheapestFare)
-                : null
-            }
-            traffic={trafficLevelForRoute(liveRoute)}
-          />
-        ) : null}
-
 
         {showHomeChrome && (
           <>
@@ -1644,6 +1750,8 @@ export default function HomeScreen({ navigation, route }) {
           showsVerticalScrollIndicator={false}
           bounces={false}
           nestedScrollEnabled
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
         >
           <HomeBottomPanel
             recentDestinations={recentDestinations}
@@ -1724,15 +1832,22 @@ const styles = StyleSheet.create({
   },
   mapSection: {
     height: MAP_HEIGHT,
+    minHeight: MAP_HEIGHT,
+    flexGrow: 0,
+    flexShrink: 0,
     overflow: "hidden",
     zIndex: 1,
   },
-  mapSectionHalf: {
+  mapSectionTrip: {
     flex: 1,
-    height: undefined,
+    flexGrow: 1,
+    flexShrink: 1,
+    overflow: "hidden",
+    zIndex: 1,
   },
   panelSection: {
     flex: 1,
+    flexShrink: 1,
     backgroundColor: COLORS.white,
     zIndex: 0,
   },

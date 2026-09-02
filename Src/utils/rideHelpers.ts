@@ -1,5 +1,6 @@
-import { DEFAULT_CURRENCY } from "../constants/locale";
+import { getActiveCountry } from "../constants/locale";
 import { getCurrencyMeta } from "../constants/countries";
+import type { Ride, RideStatus } from "../service/api/types";
 
 const RIDE_TYPE_SLUG_MAP: Record<string, string> = {
   Mini: "mini",
@@ -29,12 +30,56 @@ export function normalizeStartOtp(value: unknown): string | null {
   return text;
 }
 
+const ACTIVE_RIDE_STATUSES: RideStatus[] = [
+  "requested",
+  "searching_driver",
+  "driver_assigned",
+  "driver_arrived",
+  "in_progress",
+];
+
+export function isOngoingRideStatus(
+  status: RideStatus | string | null | undefined,
+): boolean {
+  return Boolean(status && ACTIVE_RIDE_STATUSES.includes(status as RideStatus));
+}
+
+export function normalizeRecoveredRide(ride: Partial<Ride> & { id: string }): Ride {
+  return {
+    id: ride.id,
+    status: ride.status ?? "searching_driver",
+    pickup_lat: String(ride.pickup_lat ?? ""),
+    pickup_lng: String(ride.pickup_lng ?? ""),
+    pickup_address: ride.pickup_address ?? "Pickup",
+    drop_lat: String(ride.drop_lat ?? ""),
+    drop_lng: String(ride.drop_lng ?? ""),
+    drop_address: ride.drop_address ?? "Drop",
+    estimated_fare: ride.estimated_fare ?? "0",
+    final_fare: ride.final_fare ?? null,
+    distance_km: ride.distance_km ?? null,
+    duration_min: ride.duration_min ?? null,
+    surge_multiplier: ride.surge_multiplier ?? "1",
+    ride_type_slug: ride.ride_type_slug ?? null,
+    requested_at: ride.requested_at ?? new Date().toISOString(),
+    driver_assigned_at: ride.driver_assigned_at ?? null,
+    driver_arrived_at: ride.driver_arrived_at ?? null,
+    started_at: ride.started_at ?? null,
+    completed_at: ride.completed_at ?? null,
+    cancelled_at: ride.cancelled_at ?? null,
+    driver: ride.driver ?? null,
+    route_polyline: ride.route_polyline ?? null,
+    invoice_available: ride.invoice_available ?? false,
+    start_otp: normalizeStartOtp(ride.start_otp),
+  };
+}
+
 export function formatFare(
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | undefined,
   amount: string,
 ): string {
+  const resolvedCurrency = currency || getActiveCountry().currency;
   const num = parseFloat(amount);
-  const { symbol, locale } = getCurrencyMeta(currency);
+  const { symbol, locale } = getCurrencyMeta(resolvedCurrency);
   if (Number.isNaN(num)) return `${symbol}${amount}`;
   return `${symbol}${Math.round(num).toLocaleString(locale)}`;
 }

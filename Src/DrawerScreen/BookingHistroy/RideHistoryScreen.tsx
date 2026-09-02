@@ -38,7 +38,7 @@ import {
   resolveDisplayAddress,
 } from "../../utils/rideHelpers";
 import type { Ride, RideInvoice } from "../../service/api/types";
-import { DEFAULT_CURRENCY } from "../../constants/locale";
+import { getActiveCountry } from "../../constants/locale";
 import {
   getRideInvoice,
   repeatRide,
@@ -272,7 +272,7 @@ function InvoiceModal({
   }
 
   const fare = invoice.final_fare
-    ? formatFare(invoice.currency ?? DEFAULT_CURRENCY, invoice.final_fare)
+    ? formatFare(invoice.currency ?? getActiveCountry().currency, invoice.final_fare)
     : "—";
 
   return (

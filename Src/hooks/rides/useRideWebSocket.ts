@@ -4,7 +4,6 @@ import { getWsBaseUrl } from "../../service/api/apiClient";
 import { RIDE_ENDPOINTS } from "../../service/config/apiEndPoint";
 import type {
   DriverSummary,
-  RideStatus,
   RideWsEvent,
 } from "../../service/api/types";
 import { useActiveRide } from "../../context/ActiveRideContext";
@@ -35,7 +34,6 @@ export function sendRideCancel(rideId?: string | null) {
   return true;
 }
 
-const TERMINAL_STATUSES: RideStatus[] = ["completed", "cancelled"];
 const MAX_RECONNECT_ATTEMPTS = 12;
 const BASE_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 15000;
@@ -158,6 +156,20 @@ export function useRideWebSocket(
         return;
       }
 
+      if (data.type === "payment_completed") {
+        updateFromWs({
+          payment_completed: {
+            ride_id: data.ride_id,
+            payment_status: data.payment_status,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            currency: data.currency,
+            payment_id: data.payment_id,
+          },
+        });
+        return;
+      }
+
       if (data.type === "status") {
         const startOtp = extractStartOtp(data);
         updateFromWs({
@@ -170,12 +182,10 @@ export function useRideWebSocket(
           final_fare: data.final_fare ?? null,
         });
 
-        if (TERMINAL_STATUSES.includes(data.status)) {
+        if (data.status === "cancelled") {
           intentionalCloseRef.current = true;
           wsRef.current?.close();
-          if (data.status === "cancelled") {
-            clearActiveRide();
-          }
+          clearActiveRide();
         }
       }
     };

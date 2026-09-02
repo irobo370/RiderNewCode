@@ -222,6 +222,11 @@ export interface Ride {
   start_otp: string | null;
 }
 
+export interface ActiveRidePayload {
+  has_active_ride: boolean;
+  ride: Ride | null;
+}
+
 export interface RideHistoryPage {
   items: Ride[];
   page: number;
@@ -273,6 +278,82 @@ export interface QuotePayload {
   drop: Coordinates;
 }
 
+/** Gateway checkout methods from GET /api/v1/payments/methods */
+export type PaymentMethodCode =
+  | "orange_money"
+  | "mpesa"
+  | "airtel_money"
+  | "card"
+  | "cash";
+
+export interface GatewayPaymentMethod {
+  name: string;
+  code: PaymentMethodCode;
+  is_enabled: boolean;
+}
+
+export interface InitiatePaymentRequest {
+  ride_id: string;
+  payment_method: PaymentMethodCode;
+  customer_phone?: string;
+  return_url?: string;
+}
+
+export type GatewayPaymentStatus = "pending" | "success" | "failed";
+
+export interface InitiatePaymentData {
+  payment_id: string;
+  ride_id: string;
+  status: string;
+  amount: string;
+  currency: string;
+  payment_method: PaymentMethodCode | string;
+  checkout_url: string | null;
+}
+
+export interface PaymentStatusData {
+  payment_id: string;
+  ride_id: string;
+  status: GatewayPaymentStatus | string;
+  amount: string;
+  currency: string;
+  payment_method?: PaymentMethodCode | string;
+}
+
+export type PaymentFlowStatus =
+  | "idle"
+  | "loading"
+  | "pending"
+  | "success"
+  | "failed";
+
+export interface PaymentSession {
+  paymentId: string | null;
+  rideId: string | null;
+  status: PaymentFlowStatus;
+  selectedMethod: PaymentMethodCode | null;
+  methodName: string | null;
+  amount: string | null;
+  currency: string | null;
+  checkoutUrl: string | null;
+  error: string | null;
+  paidAt: string | null;
+}
+
+/**
+ * BLOCKED — Backend receipt endpoint required.
+ * Shape reserved so the UI can connect once the contract is provided.
+ */
+export interface PaymentReceipt {
+  ride_id: string;
+  payment_id: string;
+  amount: string;
+  currency: string;
+  payment_method: string;
+  payment_status: string;
+  paid_at?: string | null;
+}
+
 export type RideWsEvent =
   | { type: "connected"; ride_id?: string; user_id?: string }
   | {
@@ -298,4 +379,13 @@ export type RideWsEvent =
         lng?: string | number;
       };
       updated_at?: string;
+    }
+  | {
+      type: "payment_completed";
+      ride_id?: string;
+      payment_status?: string;
+      amount?: number | string;
+      payment_method?: PaymentMethodCode | string;
+      currency?: string;
+      payment_id?: string;
     };

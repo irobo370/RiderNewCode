@@ -1,6 +1,5 @@
 import { GOOGLE_MAPS_API_KEY } from "../../constants/googleMaps";
-import { DEFAULT_COORDS, PLACES_COUNTRY } from "../../constants/locale";
-import { ACTIVE_COUNTRY } from "../../constants/countries";
+import { getActiveCountry } from "../../constants/countries";
 
 const PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
@@ -90,10 +89,11 @@ export async function autocompletePlaces(
     return [];
   }
 
+  const market = getActiveCountry();
   const bias =
     biasCoords?.latitude != null && biasCoords?.longitude != null
       ? biasCoords
-      : DEFAULT_COORDS;
+      : market.defaultCoords;
 
   const res = await fetch(PLACES_AUTOCOMPLETE_URL, {
     method: "POST",
@@ -103,9 +103,9 @@ export async function autocompletePlaces(
     },
     body: JSON.stringify({
       input: trimmed,
-      includedRegionCodes: [PLACES_COUNTRY],
-      languageCode: ACTIVE_COUNTRY.languageCode,
-      regionCode: PLACES_COUNTRY.toUpperCase(),
+      includedRegionCodes: [market.placesCountry],
+      languageCode: market.languageCode,
+      regionCode: market.placesCountry.toUpperCase(),
       locationBias: {
         circle: {
           center: {

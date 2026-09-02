@@ -7,6 +7,7 @@ import {
   resetAfterAuth,
   completeInitialSplash,
 } from "../navigation/navigationRef";
+import { checkAppPermissions } from "../permissions/appPermissions";
 import type { OnboardingStep } from "../utils/onboardingProgress";
 
 const PHOTO_SPLASH_MS = 1000;
@@ -15,6 +16,7 @@ const MAP_SPLASH_MS = 1500;
 type RootStackParamList = {
   SplashScreen: undefined;
   LoginScreen: undefined;
+  PermissionsRequiredScreen: undefined;
 };
 
 export default function SplashScreen() {
@@ -53,18 +55,60 @@ export default function SplashScreen() {
       return;
     }
 
-    hasNavigated.current = true;
-    completeInitialSplash();
+    let cancelled = false;
 
-    if (isAuthenticated) {
-      resetAfterAuth(onboardingStep ?? null);
-      return;
-    }
+    (async () => {
+      // Location status is read only to decide whether to show the one-time
+      // informational screen below — it must never be able to strand the
+      // user on the splash screen. Any failure reading it (e.g. Location
+      // Services unavailable/misbehaving on this device) is treated the same
+      // as "no location info" and we proceed straight into the app.
+      let locationStatus: string | undefined;
+      try {
+        const permissions = await checkAppPermissions();
+        locationStatus = permissions.permissions.find(
+          (permission) => permission.id === "location",
+        )?.status;
+      } catch {
+        locationStatus = undefined;
+      }
 
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "LoginScreen" }],
-    });
+      if (cancelled || hasNavigated.current) {
+        return;
+      }
+
+      hasNavigated.current = true;
+
+      // Location is optional (see appPermissions.ts) — the app must remain
+      // usable whether or not it's granted (App Review 5.1.5). We only show
+      // the informational permissions screen once, the first time the app
+      // launches and iOS has not yet been asked ("undetermined"). Once the
+      // user has made a choice (granted, denied, or blocked), we go straight
+      // to Login/Home on every subsequent launch and never gate on it again.
+      if (locationStatus === "undetermined") {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "PermissionsRequiredScreen" }],
+        });
+        return;
+      }
+
+      completeInitialSplash();
+
+      if (isAuthenticated) {
+        resetAfterAuth(onboardingStep ?? null);
+        return;
+      }
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "LoginScreen" }],
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     bootstrapping,
     isAuthenticated,

@@ -14,6 +14,7 @@ const RIDE_ENDPOINTS = {
   Status: (rideId) => `/api/v1/rides/${rideId}/status`,
   Invoice: (rideId) => `/api/v1/rides/${rideId}/invoice`,
   History: "/api/v1/rides/history",
+  Active: "/api/v1/rides/active",
   Repeat: (rideId) => `/api/v1/rides/${rideId}/repeat`,
   Pay: (rideId) => `/api/v1/rides/${rideId}/pay`,
   Ws: (rideId) => `/api/v1/ws/rides/${rideId}`,
@@ -33,6 +34,12 @@ const PAYMENT_ENDPOINTS = {
   Detail: (id) => `/api/v1/payment-methods/${id}`,
 };
 
+const PAYMENT_GATEWAY_ENDPOINTS = {
+  Methods: "/api/v1/payments/methods",
+  Initiate: "/api/v1/payments/initiate",
+  Status: (paymentId) => `/api/v1/payments/${paymentId}/status`,
+};
+
 const SETTINGS_ENDPOINTS = {
   Settings: "/api/v1/settings",
 };
@@ -46,6 +53,7 @@ export {
   PROFILE_ENDPOINTS,
   ADDRESS_ENDPOINTS,
   PAYMENT_ENDPOINTS,
+  PAYMENT_GATEWAY_ENDPOINTS,
   SETTINGS_ENDPOINTS,
   INSIGHTS_ENDPOINTS,
 };

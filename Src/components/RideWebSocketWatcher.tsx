@@ -1,64 +1,38 @@
-import React, { useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Toast from "react-native-toast-message";
 import { useActiveRide } from "../context/ActiveRideContext";
+import { useActiveRideRecovery } from "../hooks/rides/useActiveRideRecovery";
 import { useRideWebSocket } from "../hooks/rides/useRideWebSocket";
 import { navigateToRidePayment } from "../navigation/navigationRef";
 import { getRide } from "../service/rideService/rideService";
-import type { RideStatus } from "../service/api/types";
-
-const TERMINAL_STATUSES: RideStatus[] = ["completed", "cancelled"];
+import type { Ride, RideStatus } from "../service/api/types";
 
 export default function RideWebSocketWatcher() {
-  const { activeRide, wsStatus, driver, startOtp, setActiveRide, updateFromWs } =
+  const { activeRide, wsStatus, driver, startOtp, paymentSession, updateFromWs } =
     useActiveRide();
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const prevStatusRef = useRef<RideStatus | null>(null);
   const navigatedToSummaryRef = useRef(false);
-  const activeRideIdRef = useRef<string | null>(null);
-
-  activeRideIdRef.current = activeRide?.id ?? null;
 
   const currentStatus = (wsStatus ?? activeRide?.status ?? null) as RideStatus | null;
+  const paymentFinalized = paymentSession.status === "success";
   const shouldConnect = Boolean(
-    activeRide?.id && currentStatus && !TERMINAL_STATUSES.includes(currentStatus),
+    activeRide?.id &&
+      currentStatus &&
+      currentStatus !== "cancelled" &&
+      !(currentStatus === "completed" && paymentFinalized),
   );
 
+  const handleRecoveredRide = useCallback((ride: Ride | null) => {
+    prevStatusRef.current = ride?.status ?? null;
+    if (ride?.status === "completed") {
+      navigatedToSummaryRef.current = true;
+    }
+    setReconnectNonce((value) => value + 1);
+  }, []);
+
+  useActiveRideRecovery(handleRecoveredRide);
   useRideWebSocket(shouldConnect ? activeRide!.id : null, reconnectNonce);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", async (nextState) => {
-      if (nextState !== "active") return;
-
-      const rideId = activeRideIdRef.current;
-      if (!rideId) return;
-
-      try {
-        const ride = await getRide(rideId);
-        setActiveRide(ride);
-        setReconnectNonce((value) => value + 1);
-
-        if (__DEV__) {
-          console.log("\n===== APP RESUME — RIDE SYNC =====");
-          console.log("Ride ID:", ride.id);
-          console.log("Status:", ride.status);
-          console.log("==================================\n");
-        }
-
-        if (
-          ride.status === "completed" &&
-          !navigatedToSummaryRef.current
-        ) {
-          navigatedToSummaryRef.current = true;
-          navigateToRidePayment();
-        }
-      } catch {
-        setReconnectNonce((value) => value + 1);
-      }
-    });
-
-    return () => subscription.remove();
-  }, [setActiveRide]);
 
   useEffect(() => {
     if (!currentStatus || prevStatusRef.current === currentStatus) return;

@@ -21,10 +21,12 @@ import { FONTS } from "../utils/fonts";
 import { COLORS } from "../utils/colors";
 import { RADIUS, SPACING } from "../utils/spacing";
 import { validatePhone } from "../utils/validation";
-import { COUNTRY_CODE, PHONE_LOCAL_DIGITS } from "../constants/locale";
+import { useCountryMarket } from "../context/CountryMarketContext";
 import { toE164Phone } from "../utils/phoneFormat";
 import { authReset, loginRequest } from "../redux/Auth/authSlice";
 import { PrimaryButton } from "../components/ui";
+import CountryCodePicker from "../components/CountryCodePicker";
+import type { CountryId } from "../constants/countries";
 
 type RootStackParamList = {
   LoginScreen: undefined;
@@ -34,35 +36,16 @@ type RootStackParamList = {
   };
 };
 
-function SocialButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={styles.socialButton}
-      onPress={onPress}
-      activeOpacity={0.85}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      {icon}
-      <Text style={styles.socialLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function LoginScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { country, selectCountry } = useCountryMarket();
+  const countryCode = country.dialCode;
+  const phoneLocalDigits = country.phoneLocalDigits;
   const [phone, setPhone] = useState("");
   const [fullPhone, setFullPhone] = useState("");
   const [error, setError] = useState("");
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const dispatch = useDispatch();
   const auth = useSelector(
     (state: {
@@ -97,6 +80,15 @@ export default function LoginScreen() {
     }
   }, [apiError]);
 
+  useEffect(() => {
+    setPhone((prev) => prev.slice(0, phoneLocalDigits + 1));
+  }, [phoneLocalDigits]);
+
+  const onSelectCountry = async (countryId: CountryId) => {
+    await selectCountry(countryId);
+    setError("");
+  };
+
   const onLogin = () => {
     const validationError = validatePhone(phone);
     if (validationError) {
@@ -110,20 +102,19 @@ export default function LoginScreen() {
     dispatch(loginRequest({ phone: e164 }));
   };
 
-  const showComingSoon = () => {
-    Toast.show({
-      type: "info",
-      text1: "Coming soon",
-      text2: "Social login will be available in a future update.",
-    });
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <Spinner
         visible={loading}
         textContent="Sending OTP..."
         textStyle={{ color: COLORS.white }}
+      />
+
+      <CountryCodePicker
+        visible={countryPickerOpen}
+        selectedId={country.id}
+        onSelect={onSelectCountry}
+        onClose={() => setCountryPickerOpen(false)}
       />
 
       <ScrollView
@@ -140,7 +131,7 @@ export default function LoginScreen() {
         <View style={styles.headerText}>
           <Text style={styles.title}>Welcome</Text>
           <Text style={styles.subtitle}>
-            Enter your phone number to continue
+            Choose your country and enter your phone number
           </Text>
         </View>
 
@@ -149,24 +140,41 @@ export default function LoginScreen() {
 
           <Text style={styles.inputLabel}>Phone Number</Text>
           <View style={styles.inputContainer}>
-            <Text style={styles.countryCode}>{COUNTRY_CODE}</Text>
+            <TouchableOpacity
+              style={styles.countryCodeButton}
+              onPress={() => setCountryPickerOpen(true)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Select country code"
+            >
+              <Text style={styles.countryCode}>{countryCode}</Text>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color="#6C7278"
+                style={styles.countryChevron}
+              />
+            </TouchableOpacity>
             <View style={styles.inputDivider} />
             <TextInput
-              placeholder="8X XXX XXXX"
+              placeholder="Mobile number"
               placeholderTextColor="#999999"
               keyboardType="phone-pad"
               style={styles.input}
               value={phone}
               onChangeText={(text) => {
-                // Local mobile digits after dial code (leading 0 optional while typing)
                 setPhone(
-                  text.replace(/[^0-9]/g, "").slice(0, PHONE_LOCAL_DIGITS + 1),
+                  text.replace(/[^0-9]/g, "").slice(0, phoneLocalDigits + 1),
                 );
                 setError("");
               }}
-              maxLength={PHONE_LOCAL_DIGITS + 1}
+              maxLength={phoneLocalDigits + 1}
             />
           </View>
+
+          <Text style={styles.marketHint}>
+            {country.pickerLabel} · search & map set to {country.city}
+          </Text>
 
           <PrimaryButton
             label="Continue"
@@ -239,7 +247,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: SPACING.lg,
     height: 50,
-    marginBottom: SPACING.xxl + 4,
+    marginBottom: SPACING.sm,
+  },
+  countryCodeButton: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   countryCode: {
     fontFamily: FONTS.semiBold,
@@ -247,6 +259,9 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: -0.01,
     color: "#1F1F1F",
+  },
+  countryChevron: {
+    marginLeft: 4,
   },
   inputDivider: {
     width: 1,
@@ -260,6 +275,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#1F1F1F",
     paddingVertical: 0,
+  },
+  marketHint: {
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#6C7278",
+    marginBottom: SPACING.xxl + 4,
   },
   errorText: {
     color: COLORS.erroColor,
@@ -286,62 +308,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 16,
     color: "#FEFCFF",
-  },
-  socialSection: {
-    width: "100%",
-    maxWidth: 353,
-    alignSelf: "center",
-    marginTop: SPACING.xxxl + 12,
-    gap: 30,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(96, 112, 128, 0.15)",
-  },
-  dividerText: {
-    paddingHorizontal: 6,
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#6C7278",
-    backgroundColor: COLORS.white,
-  },
-  socialRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  socialButton: {
-    flex: 1,
-    height: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: "#EFEEF1",
-    borderRadius: 48,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  socialLabel: {
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#1F1F1F",
   },
 });

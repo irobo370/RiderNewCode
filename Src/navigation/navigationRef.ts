@@ -94,3 +94,25 @@ export function navigateToRidePayment() {
     navigationRef.navigate("RidePaymentScreen" as never);
   }
 }
+
+export function restoreActiveRideScreen() {
+  if (!navigationRef.isReady() || !isInitialSplashComplete()) {
+    return;
+  }
+
+  const current = navigationRef.getCurrentRoute()?.name;
+  if (
+    current === "HomeDrawer" ||
+    current === "DrawerNavigator" ||
+    current === "RidePaymentScreen" ||
+    current === "TripSummaryScreen" ||
+    current === "SplashScreen" ||
+    current === "PermissionsRequiredScreen" ||
+    current === "LoginScreen" ||
+    current === "OtpScreen"
+  ) {
+    return;
+  }
+
+  navigateMainTab("home");
+}

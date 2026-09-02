@@ -7,7 +7,6 @@ export { default as RoutePolyline } from "./RoutePolyline";
 export { default as NavigationHeader } from "./NavigationHeader";
 export { default as TurnInstruction } from "./TurnInstruction";
 export { default as MapControls } from "./MapControls";
-export { default as RideInfoCard } from "./RideInfoCard";
 export { default as DriverCard } from "./DriverCard";
 export { default as RideTypeSelector } from "./RideTypeSelector";
 export { default as BookingBottomSheet } from "./BookingBottomSheet";

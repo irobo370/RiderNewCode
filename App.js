@@ -12,8 +12,10 @@ import store from "./Src/redux/store";
 import Toast from "react-native-toast-message";
 import { queryClient } from "./Src/service/api/queryClient";
 import { ActiveRideProvider } from "./Src/context/ActiveRideContext";
+import { CountryMarketProvider } from "./Src/context/CountryMarketContext";
 import SessionWatcher from "./Src/components/SessionWatcher";
 import RideWebSocketWatcher from "./Src/components/RideWebSocketWatcher";
+import PermissionsResumeGate from "./Src/components/PermissionsResumeGate";
 import { navigationRef } from "./Src/navigation/navigationRef";
 
 import AuthNavigator from "./Src/navigation/AuthNavigator";
@@ -26,21 +28,24 @@ export default function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <ActiveRideProvider>
-          <SessionWatcher />
-          <RideWebSocketWatcher />
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaProvider>
-              <BottomSheetModalProvider>
-                <NavigationContainer ref={navigationRef}>
-                  <StatusBar style="auto" />
-                  <AuthNavigator />
-                </NavigationContainer>
-                <Toast />
-              </BottomSheetModalProvider>
-            </SafeAreaProvider>
-          </GestureHandlerRootView>
-        </ActiveRideProvider>
+        <CountryMarketProvider>
+          <ActiveRideProvider>
+            <SessionWatcher />
+            <RideWebSocketWatcher />
+            <PermissionsResumeGate />
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <SafeAreaProvider>
+                <BottomSheetModalProvider>
+                  <NavigationContainer ref={navigationRef}>
+                    <StatusBar style="auto" />
+                    <AuthNavigator />
+                  </NavigationContainer>
+                  <Toast />
+                </BottomSheetModalProvider>
+              </SafeAreaProvider>
+            </GestureHandlerRootView>
+          </ActiveRideProvider>
+        </CountryMarketProvider>
       </QueryClientProvider>
     </Provider>
   );

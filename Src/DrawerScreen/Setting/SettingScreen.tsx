@@ -28,7 +28,10 @@ import {
   getLanguageLabel,
   LANGUAGE_OPTIONS,
 } from "../../utils/settingsHelpers";
-import { SUPPORT_PHONE } from "../../constants/locale";
+import { getActiveCountry } from "../../constants/locale";
+import { useCountryMarket } from "../../context/CountryMarketContext";
+import CountryCodePicker from "../../components/CountryCodePicker";
+import type { CountryId } from "../../constants/countries";
 
 function SectionTitle({ title }: { title: string }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
@@ -146,11 +149,13 @@ function SettingsSection({
 
 export default function SettingsScreen() {
   const dispatch = useDispatch();
+  const { country, selectCountry } = useCountryMarket();
   const [rideUpdates, setRideUpdates] = useState(true);
   const [specialOffers, setSpecialOffers] = useState(false);
   const [language, setLanguage] = useState("en");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
 
   const performAccountDeletion = () => {
     dispatch(logoutRequest());
@@ -248,7 +253,7 @@ export default function SettingsScreen() {
   };
 
   const callSupport = () => {
-    Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => {
+    Linking.openURL(`tel:${getActiveCountry().supportPhone}`).catch(() => {
       Toast.show({
         type: "error",
         text1: "Could not start call",
@@ -257,8 +262,23 @@ export default function SettingsScreen() {
     });
   };
 
+  const onSelectCountry = async (countryId: CountryId) => {
+    await selectCountry(countryId);
+    Toast.show({
+      type: "success",
+      text1: "Country updated",
+      text2: "Phone code, search, and map region updated",
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <CountryCodePicker
+        visible={countryPickerOpen}
+        selectedId={country.id}
+        onSelect={onSelectCountry}
+        onClose={() => setCountryPickerOpen(false)}
+      />
       <View style={styles.content}>
         <ScreenHeader title="Settings" style={styles.header} />
 
@@ -320,10 +340,16 @@ export default function SettingsScreen() {
 
             <SettingsSection title="General">
               <SettingsRow
+                icon="flag-outline"
+                title="Country"
+                subtitle={`${country.pickerLabel} · ${country.dialCode}`}
+                isFirst
+                onPress={() => setCountryPickerOpen(true)}
+              />
+              <SettingsRow
                 icon="globe-outline"
                 title="Language"
                 subtitle={getLanguageLabel(language)}
-                isFirst
                 onPress={openLanguagePicker}
               />
               <SettingsRow

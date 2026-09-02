@@ -17,20 +17,21 @@ import { COLORS } from "../utils/colors";
 import { FONTS } from "../utils/fonts";
 import { ScreenHeader } from "../components/ui";
 import { formatPhoneDisplay } from "../utils/phoneFormat";
-import { DEFAULT_DEV_ADDRESS, SUPPORT_PHONE } from "../constants/locale";
+import { getActiveCountry } from "../constants/locale";
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
+  const market = getActiveCountry();
 
   const [isEditing, setIsEditing] = useState(false);
 
   const [name, setName] = useState("Krishna Sharma");
   const [email, setEmail] = useState("krishna@gmail.com");
-  const [phone, setPhone] = useState(formatPhoneDisplay(SUPPORT_PHONE));
+  const [phone, setPhone] = useState(formatPhoneDisplay(market.supportPhone));
   const [gender, setGender] = useState("");
-  const [address, setAddress] = useState(DEFAULT_DEV_ADDRESS);
+  const [address, setAddress] = useState(market.defaultDevAddress);
   const [emergencyContact, setEmergencyContact] = useState(
-    formatPhoneDisplay(SUPPORT_PHONE),
+    formatPhoneDisplay(market.supportPhone),
   );
 
   const [showGenderOptions, setShowGenderOptions] = useState(false);

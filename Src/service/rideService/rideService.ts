@@ -10,6 +10,7 @@ import type {
   RideInvoice,
   RideQuote,
   RideStatusResponse,
+  ActiveRidePayload,
 } from "../api/types";
 
 export const postQuote = (payload: QuotePayload): Promise<RideQuote> => {
@@ -29,6 +30,10 @@ export const createRide = (
 
 export const getRide = (rideId: string): Promise<Ride> => {
   return apiGet<Ride>(RIDE_ENDPOINTS.Detail(rideId));
+};
+
+export const getActiveRide = (): Promise<ActiveRidePayload> => {
+  return apiGet<ActiveRidePayload>(RIDE_ENDPOINTS.Active);
 };
 
 export const getRideStatus = (rideId: string): Promise<RideStatusResponse> => {

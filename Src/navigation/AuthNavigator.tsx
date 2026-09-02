@@ -5,6 +5,7 @@ import useCustomFonts from "../utils/fonts";
 import SplashScreen from "../Auth/SplashScreen";
 import LoginScreen from "../Auth/LoginScreen";
 import OtpScreen from "../Auth/OtpScreen";
+import PermissionsRequiredScreen from "../Auth/PermissionsRequiredScreen";
 import ProfileOnboardingScreen from "../Auth/ProfileOnboardingScreen";
 // Step 2: Add New Address onboarding — commented out (Login → OTP → Home direct)
 // import ProfileAddressOnboardingScreen from "../Auth/ProfileAddressOnboardingScreen";
@@ -77,6 +78,11 @@ export default function AuthNavigator() {
       initialRouteName="SplashScreen"
     >
       <Stack.Screen name="SplashScreen" component={SplashScreen} />
+      <Stack.Screen
+        name="PermissionsRequiredScreen"
+        component={PermissionsRequiredScreen}
+        options={{ gestureEnabled: false }}
+      />
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="OtpScreen" component={OtpScreen} />
       <Stack.Screen

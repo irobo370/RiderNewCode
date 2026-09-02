@@ -1,13 +1,11 @@
-import {
-  COUNTRY_CODE,
-  PHONE_LOCAL_DIGITS,
-} from "../constants/locale";
-import { ACTIVE_COUNTRY } from "../constants/countries";
+import { getActiveCountry } from "../constants/countries";
 
 /** Normalize local input to E.164. Strips a leading domestic trunk 0. */
 export function toE164Phone(localDigits: string): string {
   let digits = localDigits.replace(/\D/g, "");
-  const dialDigits = ACTIVE_COUNTRY.dialCodeDigits;
+  const country = getActiveCountry();
+  const dialDigits = country.dialCodeDigits;
+  const localLength = country.phoneLocalDigits;
 
   if (digits.startsWith("0")) {
     digits = digits.slice(1);
@@ -15,18 +13,20 @@ export function toE164Phone(localDigits: string): string {
 
   if (
     digits.startsWith(dialDigits) &&
-    digits.length === dialDigits.length + PHONE_LOCAL_DIGITS
+    digits.length === dialDigits.length + localLength
   ) {
     return `+${digits}`;
   }
 
-  return `${COUNTRY_CODE}${digits.slice(0, PHONE_LOCAL_DIGITS)}`;
+  return `${country.dialCode}${digits.slice(0, localLength)}`;
 }
 
 /** Display helper using the active country's dial code + digit groups. */
 export function formatPhoneDisplay(phone: string): string {
   const digits = phone.replace(/\D/g, "");
-  const dialDigits = ACTIVE_COUNTRY.dialCodeDigits;
+  const country = getActiveCountry();
+  const dialDigits = country.dialCodeDigits;
+  const localLength = country.phoneLocalDigits;
 
   let local = digits;
   if (local.startsWith(dialDigits)) {
@@ -35,10 +35,10 @@ export function formatPhoneDisplay(phone: string): string {
   if (local.startsWith("0")) {
     local = local.slice(1);
   }
-  local = local.slice(0, PHONE_LOCAL_DIGITS);
+  local = local.slice(0, localLength);
 
-  if (local.length === PHONE_LOCAL_DIGITS) {
-    const groups = ACTIVE_COUNTRY.phoneDisplayGroups;
+  if (local.length === localLength) {
+    const groups = country.phoneDisplayGroups;
     const parts: string[] = [];
     let cursor = 0;
     for (const size of groups) {
@@ -48,12 +48,12 @@ export function formatPhoneDisplay(phone: string): string {
     if (cursor < local.length) {
       parts.push(local.slice(cursor));
     }
-    return `${COUNTRY_CODE} ${parts.filter(Boolean).join(" ")}`;
+    return `${country.dialCode} ${parts.filter(Boolean).join(" ")}`;
   }
 
   if (phone.startsWith("+")) {
     return phone;
   }
 
-  return `${COUNTRY_CODE} ${phone}`;
+  return `${country.dialCode} ${phone}`;
 }

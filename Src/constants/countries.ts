@@ -1,11 +1,11 @@
 /**
  * App country / market configuration.
  *
- * Switch the whole app (phone, currency, Places, map fallback, samples)
- * by changing `ACTIVE_COUNTRY_ID` only — do not hardcode country values elsewhere.
+ * Active market is resolved from the phone location (GPS → device locale).
+ * Use getActiveCountry() / getActiveCountryId() at call time — do not hardcode.
  */
 
-export type CountryId = "drc" | "india";
+export type CountryId = "drc" | "india" | "us";
 
 export type MapRegion = {
   latitude: number;
@@ -30,6 +30,8 @@ export type CountryConfig = {
   id: CountryId;
   /** Human-readable market name */
   name: string;
+  /** Short label for country picker */
+  pickerLabel: string;
   /** Primary city used in copy / fallbacks */
   city: string;
   /** ISO 4217 */
@@ -51,6 +53,7 @@ export type CountryConfig = {
    * How to group local digits for display after dial code.
    * DRC: [2, 3, 4] → +243 81 234 5678
    * India: [5, 5] → +91 98765 43210
+   * US: [3, 3, 4] → +1 212 555 1234
    */
   phoneDisplayGroups: number[];
   mapRegion: MapRegion;
@@ -64,6 +67,7 @@ export const COUNTRIES: Record<CountryId, CountryConfig> = {
   drc: {
     id: "drc",
     name: "Democratic Republic of the Congo",
+    pickerLabel: "DRC (Kinshasa)",
     city: "Kinshasa",
     currency: "CDF",
     currencySymbol: "FC ",
@@ -117,6 +121,7 @@ export const COUNTRIES: Record<CountryId, CountryConfig> = {
   india: {
     id: "india",
     name: "India",
+    pickerLabel: "India",
     city: "New Delhi",
     currency: "INR",
     currencySymbol: "₹",
@@ -166,15 +171,136 @@ export const COUNTRIES: Record<CountryId, CountryConfig> = {
       },
     ],
   },
+
+  us: {
+    id: "us",
+    name: "United States",
+    pickerLabel: "United States",
+    city: "New York",
+    currency: "USD",
+    currencySymbol: "$",
+    numberLocale: "en-US",
+    dialCode: "+1",
+    dialCodeDigits: "1",
+    placesCountry: "us",
+    languageCode: "en",
+    phoneLocalDigits: 10,
+    phoneDisplayGroups: [3, 3, 4],
+    mapRegion: {
+      latitude: 40.758,
+      longitude: -73.9855,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08,
+    },
+    defaultCoords: {
+      latitude: 40.758,
+      longitude: -73.9855,
+    },
+    defaultDevAddress: "Times Square, Manhattan, New York, NY",
+    supportPhone: "+12125551234",
+    sampleAddresses: [
+      {
+        id: "1",
+        label: "Home",
+        address: "Upper West Side, Manhattan, New York, NY",
+        type: "home",
+      },
+      {
+        id: "2",
+        label: "Work",
+        address: "One World Trade Center, New York, NY",
+        type: "work",
+      },
+      {
+        id: "3",
+        label: "Mall",
+        address: "The Shops at Columbus Circle, New York, NY",
+        type: "other",
+      },
+      {
+        id: "4",
+        label: "Airport",
+        address: "John F. Kennedy International Airport, Queens, NY",
+        type: "other",
+      },
+    ],
+  },
 };
 
-/**
- * ⚠️ Single switch for the whole app market.
- * Use `"drc"` for Kinshasa / DRC, or `"india"` for India.
- */
-export const ACTIVE_COUNTRY_ID: CountryId = "india";
+/** All configured markets. */
+export const AVAILABLE_COUNTRY_IDS: CountryId[] = ["drc", "india", "us"];
 
-export const ACTIVE_COUNTRY: CountryConfig = COUNTRIES[ACTIVE_COUNTRY_ID];
+/**
+ * Fallback before the user picks a country (login picker).
+ */
+export const DEFAULT_COUNTRY_ID: CountryId = "india";
+
+/** ISO 3166-1 alpha-2 → market id (optional helpers / analytics). */
+export const ISO_TO_COUNTRY_ID: Record<string, CountryId> = {
+  cd: "drc",
+  in: "india",
+  us: "us",
+};
+
+export function isCountryId(value: string | null | undefined): value is CountryId {
+  return value === "drc" || value === "india" || value === "us";
+}
+
+export function resolveCountryIdFromIso(
+  iso: string | null | undefined,
+): CountryId | null {
+  if (!iso) {
+    return null;
+  }
+  return ISO_TO_COUNTRY_ID[iso.trim().toLowerCase()] ?? null;
+}
+
+export function listMarketCountries(): CountryConfig[] {
+  return AVAILABLE_COUNTRY_IDS.map((id) => COUNTRIES[id]);
+}
+
+type CountryListener = (country: CountryConfig) => void;
+
+let activeCountryId: CountryId = DEFAULT_COUNTRY_ID;
+const listeners = new Set<CountryListener>();
+
+export function getActiveCountryId(): CountryId {
+  return activeCountryId;
+}
+
+export function getActiveCountry(): CountryConfig {
+  return COUNTRIES[activeCountryId];
+}
+
+export function setActiveCountryId(nextId: CountryId): boolean {
+  if (!isCountryId(nextId)) {
+    return false;
+  }
+  if (nextId === activeCountryId) {
+    return false;
+  }
+  activeCountryId = nextId;
+  const next = COUNTRIES[nextId];
+  listeners.forEach((listener) => listener(next));
+  return true;
+}
+
+export function subscribeActiveCountry(listener: CountryListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * @deprecated Use getActiveCountryId()
+ */
+export const ACTIVE_COUNTRY_ID: CountryId = DEFAULT_COUNTRY_ID;
+
+/**
+ * @deprecated Use getActiveCountry()
+ */
+export const ACTIVE_COUNTRY: CountryConfig = COUNTRIES[DEFAULT_COUNTRY_ID];
 
 /** Resolve currency display metadata (active country + common extras). */
 export function getCurrencyMeta(currency: string): {
@@ -195,5 +321,5 @@ export function getCurrencyMeta(currency: string): {
     return { symbol: "$", locale: "en-US" };
   }
 
-  return { symbol: `${currency} `, locale: "en-US" };
+  return { symbol: `${currency} `, locale: getActiveCountry().numberLocale };
 }
